@@ -4,6 +4,7 @@ import streamlit as st
 import plotly.express as px
 from datetime import datetime
 import unicodedata
+import os
 
 # -----------------------------------------------------------------------------
 # 1. SETUP
@@ -20,7 +21,10 @@ def carregar_dados():
     Conecta ao banco SQLite local e extrai os dados dos clientes.
     Armazenado em cache para otimizar a performance.
     """
-    conn = sqlite3.connect('dados_genealogia.db')
+    pasta_atual = os.path.dirname(os.path.abspath(__file__))
+    caminho_banco = os.path.join(pasta_atual, 'dados_genealogia.db')
+
+    conn = sqlite3.connect(caminho_banco)
     query = 'SELECT * FROM tabela_clientes'
     df = pd.read_sql_query(query, conn)
 
