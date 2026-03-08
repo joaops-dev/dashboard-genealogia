@@ -21,6 +21,6 @@ df_derretido['mes'] = datetime.now().month
 df_derretido['ano'] = datetime.now().year
 
 conn = sqlite3.connect(caminho_banco)
-df_derretido.to_sql('tabela_metas', conn, if_exists = 'append', index = False)
+df_derretido.to_sql('tabela_metas', conn, if_exists = 'äppend', index = False)
 conn.commit()
 conn.close()

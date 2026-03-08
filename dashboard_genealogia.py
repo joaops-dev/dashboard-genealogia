@@ -21,6 +21,14 @@ PALETA_STATUS = {
 }
 
 ORDEM_STATUS = ['>=180 dias', '91-179 dias', '31-90 dias', '<30 dias', 'Sem data']
+TIME_EXECUTORES = [
+    'Érica Silva de Almeida Martins',
+    'Bruna Rocha Amaral',
+    'Leandro Pires Costa',
+    'Isabella Fernandes Fukushima',
+    'Rayssa Gomes Carvalho',
+    'Emerson de Oliveira Figueredo'
+]
 
 # -----------------------------------------------------------------------------
 # 2. EXTRAÇÃO DE DADOS (ETL - Extract)
@@ -56,16 +64,14 @@ df, df_metas = carregar_dados()
 # 2. DEFININDO OS DASHBOARDS
 # 2.1 DASHBOARD DOS EXECUTORES
 # -----------------------------------------------------------------------------
-
 def dashboard_executor(nome_colaborador):
     if nome_colaborador == 'Executores':
         st.title('Visão Global: Todos os Executores')
         st.info('Mostrando a carteira de TODA a equipe de execução!')
-        df_colaborador = df
+        df_colaborador = df[df['nome_responsavel'].isin(TIME_EXECUTORES)]
 
     else:
         st.title(f'Carteira de: {nome_colaborador}')
-        st.subheader('Executor')
         st.info(f'O sistema busca as metas apenas de {nome_colaborador}!')
         df_colaborador = df[df['nome_responsavel'] == nome_colaborador]
 
@@ -100,20 +106,21 @@ def dashboard_executor(nome_colaborador):
     meta_alvo = None
 
     if nome_colaborador == 'Executores':
+        meta_equipe = meta_mensal[meta_mensal['nome_responsavel'].isin(TIME_EXECUTORES)]
         if not meta_mensal.empty:
-            meta_alvo = int(meta_mensal['meta_fixa'].sum())
+            meta_alvo = int(meta_equipe['meta_fixa'].sum())
 
     else:
         meta_individual = meta_mensal[meta_mensal['nome_responsavel'] == nome_colaborador]
         if not meta_individual.empty:
-            meta_alvo = int(meta_individual['meta_fixa'].iloc[0]) 
+            meta_alvo = int(meta_individual['meta_fixa'].iloc[0])
 
     distancia_meta = 0
     cor_delta = 'normal'
 
     if meta_alvo is not None:
-        meta_fim_mes = clientes_criticos + clientes_alerta
-        distancia_meta = meta_fim_mes - meta_alvo
+        clientes_fim_mes = clientes_criticos + clientes_alerta
+        distancia_meta = clientes_fim_mes - meta_alvo
 
         if distancia_meta > 0:
             cor_delta = 'inverse'
@@ -160,7 +167,7 @@ def dashboard_executor(nome_colaborador):
         category_orders = {'faixa_dias_pesquisa': ORDEM_STATUS}
     )
     fig_clientes.update_traces(sort = False)
-    col_kpi.plotly_chart(fig_clientes, width = 'stretch')
+    col_kpi.plotly_chart(fig_clientes, width = 'stretch', key = f'grafico_exec_{nome_colaborador}')
 
     col_clientes.warning('⚠️ Clientes próximos de estourar o prazo')
     col_clientes.dataframe(
@@ -199,15 +206,65 @@ def dashboard_pesquisador(nome_colaborador):
 
     else:
         st.title(f'Carteira de: {nome_colaborador}')
-        st.subheader('Pesquisador')
         st.info(f'O sistema busca as metas apenas de {nome_colaborador}!')
         df_colaborador = df[df['nome_responsavel'] == nome_colaborador]
         st.dataframe(df_colaborador)
 
 # -----------------------------------------------------------------------------
+# 2.3 DASHBOARD DA GENEALOGIA (VISÃO MACRO)
+# -----------------------------------------------------------------------------
+def dashboard_genealogia(visao_escolhida):
+    if visao_escolhida == 'Genealogia':
+        st.title('Visão Macro: Genealogia')
+        df_visao = df
+
+    elif visao_escolhida == 'Executores':
+        st.title('Visão Macro: Executores')
+        df_visao =df[df['nome_responsavel'].isin(TIME_EXECUTORES)]
+
+    else:
+        st.title(f'Visão Macro: {visao_escolhida}')
+        df_visao = df[df['nome_responsavel'] == visao_escolhida]
+
+    # -----------------------------------------------------------------------------
+    # 2.3.1 TRANSFORMAÇÃO E FILTROS (ETL - Transform)
+    # -----------------------------------------------------------------------------
+    
+    # -----------------------------------------------------------------------------
+    # 2.3.2 REGRAS DE NEGÓCIO E KPIs
+    # -----------------------------------------------------------------------------
+    df_criticos = df_visao[df_visao['data_dif'] >= 180]
+    clientes_criticos = len(df_criticos)
+
+    # -----------------------------------------------------------------------------
+    # 2.3.3 RENDERIZAÇÃO DA INTERFACE VISUAL
+    # -----------------------------------------------------------------------------
+    st.markdown('---')
+    st.header(f'Mostrando {len(df_visao)} Clientes')
+
+    col_kpi, col_grafico = st.columns(2)
+
+    col_kpi.metric('Clientes >= 180 Dias', clientes_criticos)
+
+    tabela_clientes = df_visao['faixa_dias_pesquisa'].value_counts().reset_index(name = 'quantidade')
+    fig_clientes = px.pie(
+        tabela_clientes,
+        values = 'quantidade',
+        names = 'faixa_dias_pesquisa',
+        hole = 0.4,
+        color = 'faixa_dias_pesquisa',
+        color_discrete_map = PALETA_STATUS,
+        category_orders = {'faixa_dias_pesquisa': ORDEM_STATUS}
+    )
+    fig_clientes.update_traces(sort = False)
+    col_grafico.plotly_chart(fig_clientes, width = 'stretch', key = f'grafico_gen_{visao_escolhida}')
+
+    with st.expander('Ver Tabela Completa'):
+        st.dataframe(df_visao, width = 'stretch', hide_index = True)
+
+# -----------------------------------------------------------------------------
 # 3. DESENHANDO AS DIFERENTES VISÕES DO SITE
 # -----------------------------------------------------------------------------
-
 login = st.secrets['usuarios']
 
 if 'logado' not in st.session_state:
@@ -233,19 +290,23 @@ else:
     if cargo in ['gestor', 'coordenador']:
         nome_logado = st.session_state['nome']
         st.title(f'Seja bem-vindo, {nome_logado}')
-        aba_executores, aba_pesquisadores = st.tabs(['Executores', 'Pesquisadores'])
+
+        aba_genealogia, aba_executores, aba_pesquisadores = st.tabs(['Genealogia', 'Executores', 'Pesquisadores'])
+
+        with aba_genealogia:
+            nomes_unicos = df['nome_responsavel'].unique().tolist()
+            lista_geral = ['Genealogia', 'Executores'] + sorted(nomes_unicos, key = lambda x: unicodedata.normalize('NFKD', str(x)).encode('ASCII', 'ignore'))
+            visao_escolhida = st.selectbox('Selecione a Visão Macro:', lista_geral, key = 'sel_gen')
+            dashboard_genealogia(visao_escolhida)
 
         with aba_executores:
-            nomes_unicos = df['nome_responsavel'].unique().tolist()
-            lista_executores = sorted(nomes_unicos, key = lambda x: unicodedata.normalize('NFKD', str(x)).encode('ASCII', 'ignore'))
-            lista_executores.insert(0, 'Executores')
-            executor_escolhido = st.selectbox('De quem é a carteira que você quer ver?', lista_executores)
+            lista_executores = ['Executores'] + sorted(TIME_EXECUTORES, key = lambda x: unicodedata.normalize('NFKD', str(x)).encode('ASCII', 'ignore'))
+            executor_escolhido = st.selectbox('Selecione o Executor:', lista_executores, key = 'sel_exec')
             dashboard_executor(executor_escolhido)
 
         with aba_pesquisadores:
-            lista_pesquisadores = sorted(['Vanessa Rocha', 'Ian De Carvalho Castello Branco'])
-            lista_pesquisadores.insert(0, 'Pesquisadores')
-            pesquisador_escolhido = st.selectbox('De quem é a carteira que você quer ver?', lista_pesquisadores)
+            lista_pesquisadores = ['Pesquisadores'] + sorted(['Vanessa Rocha', 'Ian De Carvalho Castello Branco'], key = lambda x: unicodedata.normalize('NFKD', str(x)).encode('ASCII', 'ignore'))
+            pesquisador_escolhido = st.selectbox('Selecione o Pesquisador:', lista_pesquisadores, key = 'sel_pesq')
             dashboard_pesquisador(pesquisador_escolhido)
 
     elif cargo == 'executor':
