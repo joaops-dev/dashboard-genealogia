@@ -5,20 +5,41 @@ import plotly.express as px
 from datetime import datetime
 import unicodedata
 import os
+import time
+from streamlit_cookies_controller import CookieController
 
 # -----------------------------------------------------------------------------
 # 1. SETUP E CONSTANTES
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title = 'Dashboard Genealogia', layout = 'wide')
+controller = CookieController()
 st.title('Painel de Clientes')
 
-PALETA_STATUS = {
-    '>=180 dias': '#FF4B4B',
-    '91-179 dias': '#FF8C00',
-    '31-90 dias': '#FFC300',
-    '<30 dias': '#00CC96',
-    'Sem data': '#8D99AE'
+TEMAS_GRAFICO = {
+    'Corporativo': {
+        '>=180 dias': '#FF4B4B', '91-179 dias': '#FF8C00',
+        '31-90 dias': '#FFC300', '<30 dias': '#00CC96', 'Sem data': '#8D99AE'
+    },
+    'Cidadania4u': {
+        '>=180 dias': '#8B1C31', '91-179 dias': '#D4AF37',
+        '31-90 dias': '#004B87', '<30 dias': '#008C45', 'Sem data': '#A9A9A9'
+    },
+    'Hacker': {
+        '>=180 dias': '#FF0000', '91-179 dias': '#FFD300', 
+        '31-90 dias': '#008F11', '<30 dias': '#00FF41', 'Sem data': '#4D4D4D'
+    },
+    'Kali Linux': {
+        '>=180 dias': '#E74C3C', '91-179 dias': '#F39C12', 
+        '31-90 dias': '#2980B9', '<30 dias': '#1ABC9C', 'Sem data': '#7F8C8D'
+    },
+    'Mr. Robot': {
+        '>=180 dias': '#8A0303', '91-179 dias': '#C0392B', 
+        '31-90 dias': '#BDC3C7', '<30 dias': '#ECF0F1', 'Sem data': '#2C3E50'
+    }
 }
+
+if 'paleta_atual' not in st.session_state:
+    st.session_state['paleta_atual'] = TEMAS_GRAFICO['Corporativo']
 
 ORDEM_STATUS = ['>=180 dias', '91-179 dias', '31-90 dias', '<30 dias', 'Sem data']
 TIME_EXECUTORES = [
@@ -163,7 +184,7 @@ def dashboard_executor(nome_colaborador):
         names = 'faixa_dias_pesquisa',
         hole = 0.4,
         color = 'faixa_dias_pesquisa',
-        color_discrete_map = PALETA_STATUS,
+        color_discrete_map = st.session_state['paleta_atual'],
         category_orders = {'faixa_dias_pesquisa': ORDEM_STATUS}
     )
     fig_clientes.update_traces(sort = False)
@@ -253,7 +274,7 @@ def dashboard_genealogia(visao_escolhida):
         names = 'faixa_dias_pesquisa',
         hole = 0.4,
         color = 'faixa_dias_pesquisa',
-        color_discrete_map = PALETA_STATUS,
+        color_discrete_map = st.session_state['paleta_atual'],
         category_orders = {'faixa_dias_pesquisa': ORDEM_STATUS}
     )
     fig_clientes.update_traces(sort = False)
@@ -267,6 +288,14 @@ def dashboard_genealogia(visao_escolhida):
 # -----------------------------------------------------------------------------
 login = st.secrets['usuarios']
 
+cookie_usuario = controller.get('usuario_logado')
+cookie_cargo = controller.get('cargo_logado')
+
+if cookie_usuario and cookie_cargo:
+    st.session_state['logado'] = True
+    st.session_state['nome'] = cookie_usuario
+    st.session_state['cargo'] = cookie_cargo
+
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
 
@@ -279,17 +308,40 @@ if st.session_state['logado'] == False:
     if st.button('Entrar'):
         if usuario_digitado in login and login[usuario_digitado]['senha'] == senha_digitada:
             st.session_state['logado'] = True
-
             st.session_state['nome'] = login[usuario_digitado]['nome_real']
             st.session_state['cargo'] = login[usuario_digitado]['cargo']
+
+            controller.set('usuario_logado', login[usuario_digitado]['nome_real'], max_age = 86400)
+            controller.set('cargo_logado', login[usuario_digitado]['cargo'], max_age = 86400)
             
+            st.success('Login efetuado! Carregando...')
+            time.sleep(1.0)
             st.rerun()
+
+        else:
+            st.error('Usuário ou senha incorretos.')
+
 else:
     cargo = st.session_state['cargo']
 
-    if cargo in ['gestor', 'coordenador']:
+    if cargo in ['dev', 'gestor', 'coordenador']:
         nome_logado = st.session_state['nome']
         st.title(f'Seja bem-vindo, {nome_logado}')
+
+        if cargo == 'dev' or nome_logado == 'João Pedro Silva Freitas':
+            st.sidebar.header('Ferramentas VIP')
+
+            if st.sidebar.button('Limpar Cache do Banco'):
+                st.cache_data.clear()
+                st.toast('Cache limpo com sucesso!', icon = '✅')
+                time.sleep(1.5)
+                st.rerun()
+
+            tema_escolhido = st.sidebar.selectbox('Paleta de Cores:', list(TEMAS_GRAFICO.keys()))
+
+            if st.session_state.get('paleta_atual') != TEMAS_GRAFICO[tema_escolhido]:
+                st.session_state['paleta_atual'] = TEMAS_GRAFICO[tema_escolhido]
+                st.rerun()
 
         aba_genealogia, aba_executores, aba_pesquisadores = st.tabs(['Genealogia', 'Executores', 'Pesquisadores'])
 
@@ -318,7 +370,10 @@ else:
         dashboard_pesquisador(nome_logado)
 
     if st.sidebar.button('Sair'):
-        st.session_state['logado'] = False
+        controller.remove('usuario_logado')
+        controller.remove('cargo_logado')
+        st.session_state.clear()
+        time.sleep(0.5)
         st.rerun()
 
 # Rodapé do Sistema
