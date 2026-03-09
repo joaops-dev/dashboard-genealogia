@@ -93,7 +93,6 @@ def dashboard_executor(nome_colaborador):
 
     else:
         st.title(f'Carteira de: {nome_colaborador}')
-        st.info(f'O sistema busca as metas apenas de {nome_colaborador}!')
         df_colaborador = df[df['nome_responsavel'] == nome_colaborador]
 
     # -----------------------------------------------------------------------------
