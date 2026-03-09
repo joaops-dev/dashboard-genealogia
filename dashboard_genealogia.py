@@ -88,10 +88,12 @@ df, df_metas = carregar_dados()
 def dashboard_executor(nome_colaborador):
     if nome_colaborador == 'Executores':
         st.title('Visão Global: Todos os Executores')
+        st.info('Mostrando a carteira de TODA a equipe de execução!')
         df_colaborador = df[df['nome_responsavel'].isin(TIME_EXECUTORES)]
 
     else:
         st.title(f'Carteira de: {nome_colaborador}')
+        st.info(f'O sistema busca as metas apenas de {nome_colaborador}!')
         df_colaborador = df[df['nome_responsavel'] == nome_colaborador]
 
     # -----------------------------------------------------------------------------
@@ -261,7 +263,7 @@ def dashboard_genealogia(visao_escolhida):
     st.markdown('---')
     st.header(f'Mostrando {len(df_visao)} Clientes')
 
-    col_kpi, col_grafico = st.columns(2)
+    col_kpi, col_tabela = st.columns(2)
 
     col_kpi.metric('Clientes >= 180 Dias', clientes_criticos)
 
@@ -276,10 +278,10 @@ def dashboard_genealogia(visao_escolhida):
         category_orders = {'faixa_dias_pesquisa': ORDEM_STATUS}
     )
     fig_clientes.update_traces(sort = False)
-    col_grafico.plotly_chart(fig_clientes, width = 'stretch', key = f'grafico_gen_{visao_escolhida}')
+    col_kpi.plotly_chart(fig_clientes, width = 'stretch', key = f'grafico_gen_{visao_escolhida}')
 
-    with st.expander('Ver Tabela Completa'):
-        st.dataframe(df_visao, width = 'stretch', hide_index = True)
+    col_tabela.info('Mostrando Todos Clientes')
+    col_tabela.dataframe(df_visao, width = 'stretch', hide_index = True)
 
 # -----------------------------------------------------------------------------
 # 3. DESENHANDO AS DIFERENTES VISÕES DO SITE
@@ -296,6 +298,10 @@ if cookie_usuario and cookie_cargo:
 
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
+if 'cargo' not in st.session_state:
+    st.session_state['cargo'] = None
+if 'nome' not in st.session_state:
+    st.session_state['nome'] = None
 
 if st.session_state['logado'] == False:
     st.title('Acesso Restrito')
@@ -355,7 +361,7 @@ else:
             dashboard_executor(executor_escolhido)
 
         with aba_pesquisadores:
-            lista_pesquisadores = ['Pesquisadores'] + sorted(['Vanessa Rocha', 'Ian De Carvalho Castello Branco'], key = lambda x: unicodedata.normalize('NFKD', str(x)).encode('ASCII', 'ignore'))
+            lista_pesquisadores = ['Pesquisadores'] + sorted(['Vanessa Rocha', 'Ian Castello'], key = lambda x: unicodedata.normalize('NFKD', str(x)).encode('ASCII', 'ignore'))
             pesquisador_escolhido = st.selectbox('Selecione o Pesquisador:', lista_pesquisadores, key = 'sel_pesq')
             dashboard_pesquisador(pesquisador_escolhido)
 
