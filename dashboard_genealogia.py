@@ -88,12 +88,10 @@ df, df_metas = carregar_dados()
 def dashboard_executor(nome_colaborador):
     if nome_colaborador == 'Executores':
         st.title('Visão Global: Todos os Executores')
-        st.info('Mostrando a carteira de TODA a equipe de execução!')
         df_colaborador = df[df['nome_responsavel'].isin(TIME_EXECUTORES)]
 
     else:
         st.title(f'Carteira de: {nome_colaborador}')
-        st.info(f'O sistema busca as metas apenas de {nome_colaborador}!')
         df_colaborador = df[df['nome_responsavel'] == nome_colaborador]
 
     # -----------------------------------------------------------------------------
