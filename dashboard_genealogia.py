@@ -88,7 +88,6 @@ df, df_metas = carregar_dados()
 def dashboard_executor(nome_colaborador):
     if nome_colaborador == 'Executores':
         st.title('Visão Global: Todos os Executores')
-        st.info('Mostrando a carteira de TODA a equipe de execução!')
         df_colaborador = df[df['nome_responsavel'].isin(TIME_EXECUTORES)]
 
     else:
