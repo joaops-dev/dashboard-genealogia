@@ -10,7 +10,7 @@ from streamlit_cookies_controller import CookieController
 # -----------------------------------------------------------------------------
 # 1. SETUP E CONSTANTES
 # -----------------------------------------------------------------------------
-st.set_page_config(page_title = 'Dashboard Genealogia 3.1', layout = 'wide')
+st.set_page_config(page_title = 'Cleitin 3.1', layout = 'wide')
 
 st.markdown(
     '''
