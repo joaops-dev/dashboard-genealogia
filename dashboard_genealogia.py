@@ -1,11 +1,10 @@
+import time
+import requests
+import unicodedata
 import pandas as pd
-import sqlite3
 import streamlit as st
 import plotly.express as px
 from datetime import datetime
-import unicodedata
-import os
-import time
 from streamlit_cookies_controller import CookieController
 
 # -----------------------------------------------------------------------------
@@ -51,33 +50,58 @@ TIME_EXECUTORES = [
     'Emerson de Oliveira Figueredo'
 ]
 
+API_URL = 'https://api-genealogia.onrender.com'
+
 # -----------------------------------------------------------------------------
 # 2. EXTRAÇÃO DE DADOS (ETL - Extract)
 # -----------------------------------------------------------------------------
 @st.cache_data
 def carregar_dados():
+
     """
-    Conecta ao banco SQLite local e extrai os dados dos clientes.
-    Armazenado em cache para otimizar a performance.
+    Busca os dados no FastAPI e aplica as transformações de negócio.
     """
-    pasta_atual = os.path.dirname(os.path.abspath(__file__))
-    caminho_banco = os.path.join(pasta_atual, 'data', 'dados_genealogia.db')
+    try:
+        res_clientes = requests.get(f'{API_URL}/clientes')
+        df = pd.DataFrame(res_clientes.json())
 
-    conn = sqlite3.connect(caminho_banco)
-    query = 'SELECT * FROM tabela_clientes'
-    df = pd.read_sql_query(query, conn)
+        res_metas = requests.get(f'{API_URL}/metas')
+        df_metas = pd.DataFrame(res_metas.json())
 
-    query_metas = 'SELECT * FROM tabela_metas'
-    df_metas = pd.read_sql_query(query_metas, conn)
-    conn.close()
+        df['data_inicio_pesquisas'] = pd.to_datetime(df['data_inicio_pesquisas'], dayfirst = True, errors = 'coerce')
+        df['data_vencimento'] = df['data_inicio_pesquisas'] + pd.to_timedelta(180, unit = 'd')
+        df['data_dif'] = (pd.Timestamp.now() - df['data_inicio_pesquisas']).dt.days
+        df['data_regressiva'] = (180 - df['data_dif']).clip(lower = 0)
+        df['nome_responsavel'] = df['nome_responsavel'].fillna('Sem Responsável')
 
-    df['data_inicio_pesquisas'] = pd.to_datetime(df['data_inicio_pesquisas'], dayfirst = True, errors = 'coerce')
-    df['data_vencimento'] = df['data_inicio_pesquisas'] + pd.to_timedelta(180, unit = 'd')
-    df['data_dif'] = (pd.Timestamp.now() - df['data_inicio_pesquisas']).dt.days
-    df['data_regressiva'] = (180 - df['data_dif']).clip(lower = 0)
-    df['nome_responsavel'] = df['nome_responsavel'].fillna('Sem Responsável')
+        return df, df_metas
 
-    return df, df_metas
+    except Exception as e:
+        st.error(f'Erro ao conectar com a API: {e}')
+        return pd.DataFrame(), pd.DataFrame()
+
+def enviar_csv(arquivo, endpoint):
+    try:
+        files = {'arquivo': (arquivo.name, arquivo.getvalue(), 'text/csv')}
+        response = requests.post(f'{API_URL}/{endpoint}', files = files)
+
+        if response.status_code == 200:
+            resultado = response.json()
+
+            if resultado.get('sucesso'):
+                st.sidebar.success(resultado.get('mensagem'))
+                st.cache_data.clear()
+                time.sleep(1.5)
+                st.rerun()
+
+            else:
+                st.sidebar.error(f'Erro na API: {resultado.get('erro')}')
+
+        else:
+            st.sidebar.error(f'Erro de conexão: {response.status_code}')
+
+    except Exception as e:
+        st.sidebar.error(f'Falha ao enviar: {e}')
 
 df, df_metas = carregar_dados()
 
@@ -326,9 +350,24 @@ if st.session_state['logado'] == False:
 else:
     cargo = st.session_state['cargo']
 
+    #VISUALIZAÇÃO DO GESTOR, COORDENADOR E DEV
     if cargo in ['dev', 'gestor', 'coordenador']:
         nome_logado = st.session_state['nome']
         st.title(f'Seja bem-vindo, {nome_logado}')
+
+        with st.sidebar.expander('Atualizar Dados', expanded = False):
+            up_clientes = st.file_uploader('CSV de Clientes', type = ['csv'], key = 'up_cli')
+
+            if up_clientes:
+                if st.button('Confirmar Upload Clientes', width = 'stretch'):
+                    enviar_csv(up_clientes, 'upload-clientes')
+
+            st.markdown('---')
+            up_metas = st.file_uploader('CSV de Metas', type = ['csv'], key = 'up_met')
+
+            if up_metas:
+                if st.button('Confirmar Upload Metas', width = 'stretch'):
+                    enviar_csv(up_metas, 'upload-metas')
 
         if cargo == 'dev' or nome_logado == 'João Pedro Silva Freitas':
             st.sidebar.header('Ferramentas VIP')
@@ -363,10 +402,12 @@ else:
             pesquisador_escolhido = st.selectbox('Selecione o Pesquisador:', lista_pesquisadores, key = 'sel_pesq')
             dashboard_pesquisador(pesquisador_escolhido)
 
+    #VISUALIZAÇÃO DO EXECUTOR
     elif cargo == 'executor':
         nome_logado = st.session_state['nome']
         dashboard_executor(nome_logado)
-       
+    
+    #VISUALIZAÇÃO DO PESQUISADOR
     elif cargo == 'pesquisador':
         nome_logado = st.session_state['nome']
         dashboard_pesquisador(nome_logado)
@@ -380,4 +421,4 @@ else:
 
 # Rodapé do Sistema
 st.sidebar.markdown('---')
-st.sidebar.caption('Build v2.0.0 | Dev: João Pedro')
+st.sidebar.caption('Build v3.0.0 | Dev: João Pedro')
