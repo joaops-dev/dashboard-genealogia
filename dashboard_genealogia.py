@@ -375,7 +375,7 @@ else:
         controller.remove('usuario_logado')
         controller.remove('cargo_logado')
         st.session_state.clear()
-        time.sleep(0.5)
+        time.sleep(1.5)
         st.rerun()
 
 # Rodapé do Sistema
