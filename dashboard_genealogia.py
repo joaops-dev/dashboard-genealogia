@@ -109,7 +109,7 @@ def carregar_dados():
     except Exception as e:
         st.error(f'Erro ao conectar com a API: {e}')
         return pd.DataFrame(), pd.DataFrame()
-    
+
 @st.cache_data(ttl = 600)
 def buscar_nota(nome):
     try:
