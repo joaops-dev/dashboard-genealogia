@@ -10,7 +10,24 @@ from streamlit_cookies_controller import CookieController
 # -----------------------------------------------------------------------------
 # 1. SETUP E CONSTANTES
 # -----------------------------------------------------------------------------
-st.set_page_config(page_title = 'Dashboard Genealogia', layout = 'wide')
+st.set_page_config(page_title = 'Cleitin 3.1', layout = 'wide')
+
+st.markdown(
+    '''
+    <style>
+    [data-testid='stElementToolbar'] {
+        display: none !important;
+    }
+
+    button[title='Download as CSV'] {
+        visibility: hidden;
+        display: none !important;
+    }
+    </style>
+    ''',
+    unsafe_allow_html = True
+)
+
 controller = CookieController()
 st.title('Painel de Clientes')
 
@@ -41,6 +58,7 @@ if 'paleta_atual' not in st.session_state:
     st.session_state['paleta_atual'] = TEMAS_GRAFICO['Corporativo']
 
 ORDEM_STATUS = ['>=180 dias', '91-179 dias', '31-90 dias', '<30 dias', 'Sem data']
+
 TIME_EXECUTORES = [
     'Érica Silva de Almeida Martins',
     'Bruna Rocha Amaral',
@@ -48,6 +66,13 @@ TIME_EXECUTORES = [
     'Isabella Fernandes Fukushima',
     'Rayssa Gomes Carvalho',
     'Emerson de Oliveira Figueredo'
+]
+TIME_PESQUISADORES = [
+    'Ian Castello',
+    'Vanessa Rocha',
+    'Ana Beatriz Sobral',
+    'Thaiane Alves Araujo',
+    'Lourena'
 ]
 
 API_URL = 'https://api-genealogia.onrender.com'
@@ -95,13 +120,19 @@ def enviar_csv(arquivo, endpoint):
                 st.rerun()
 
             else:
-                st.sidebar.error(f'Erro na API: {resultado.get('erro')}')
+                st.sidebar.error(f'Erro na API: {resultado.get("erro")}')
 
         else:
             st.sidebar.error(f'Erro de conexão: {response.status_code}')
 
     except Exception as e:
         st.sidebar.error(f'Falha ao enviar: {e}')
+
+def destacar_atraso(linha):
+    if pd.notna(linha['dias_sem_novas_notas']) and linha['dias_sem_novas_notas'] >= 180:
+        return ['background-color: #ff4b4b33'] * len(linha)
+    
+    return [''] * len(linha)
 
 df, df_metas = carregar_dados()
 
@@ -136,7 +167,7 @@ def dashboard_executor(nome_colaborador):
 
     df_criticos = df_colaborador[
         df_colaborador['data_dif'] >= 180
-    ].sort_values(by = 'data_dif', ascending = False)
+    ].sort_values(by = 'dias_sem_novas_notas', ascending = False)
 
     clientes_criticos = len(df_criticos)
     clientes_alerta = len(df_alerta)
@@ -177,7 +208,9 @@ def dashboard_executor(nome_colaborador):
     # -----------------------------------------------------------------------------
     configuracao_padrao = {
         'nome_cliente': st.column_config.TextColumn('Nome do Cliente'),
+        'dias_sem_novas_notas': st.column_config.NumberColumn('Dias Sem Notas', format = '%d dias', help = 'Quantidade de dias que a nota está atrasada'),
         'link_do_app': st.column_config.LinkColumn('Link do App', display_text = 'Abrir Link'),
+        'faixa_dias_pesquisa': st.column_config.TextColumn('Status do Cliente'),
         'data_dif': st.column_config.NumberColumn('Dias de Casa', format = '%d dias'),
         'data_regressiva': st.column_config.NumberColumn('Dias Restantes', format = '%d dias'),
         'data_inicio_pesquisas': st.column_config.DateColumn('Início', format = 'DD/MM/YYYY'),
@@ -210,7 +243,7 @@ def dashboard_executor(nome_colaborador):
         category_orders = {'faixa_dias_pesquisa': ORDEM_STATUS}
     )
     fig_clientes.update_traces(sort = False)
-    col_kpi.plotly_chart(fig_clientes, width = 'stretch', key = f'grafico_exec_{nome_colaborador}')
+    col_kpi.plotly_chart(fig_clientes, width = 'stretch', key = f'grafico_exec_{nome_colaborador}', config = {'displayModeBar': False})
 
     col_clientes.warning('⚠️ Clientes próximos de estourar o prazo')
     col_clientes.dataframe(
@@ -223,16 +256,33 @@ def dashboard_executor(nome_colaborador):
 
     st.subheader('Clientes >= 180 Dias')
     st.dataframe(
-        df_criticos[['nome_cliente', 'link_do_app', 'data_dif', 'data_inicio_pesquisas', 'data_vencimento']],
+        df_criticos[['nome_cliente', 'link_do_app', 'dias_sem_novas_notas', 'data_dif', 'data_inicio_pesquisas', 'data_vencimento']],
         column_config = configuracao_padrao,
         width = 'stretch',
         hide_index = True
     )
 
     #Visualização da Carteira
+    colunas_carteira = [
+        'nome_cliente',
+        'dias_sem_novas_notas',
+        'link_do_app',
+        'data_dif',
+        'faixa_dias_pesquisa',
+        'data_inicio_pesquisas',
+        'data_vencimento'
+    ]
+
+    df_carteira = df_colaborador[colunas_carteira].sort_values(
+        by = 'dias_sem_novas_notas',
+        ascending = False
+    )
+
+    df_carteira_estilizada = df_carteira.style.apply(destacar_atraso, axis = 1)
+
     with st.expander('Sua Carteira'):
         st.dataframe(
-            df_colaborador,
+            df_carteira_estilizada,
             column_config = configuracao_padrao,
             width = 'stretch',
             hide_index = True
@@ -244,14 +294,148 @@ def dashboard_executor(nome_colaborador):
 def dashboard_pesquisador(nome_colaborador):
     if nome_colaborador == 'Pesquisadores':
         st.title('Visão Global: Todos os Pesquisadores')
-        st.info('Mostrando a carteira de TODA a equipe de pesquisa!')
-        df_colaborador = df
+        df_colaborador = df[df['nome_responsavel'].isin(TIME_PESQUISADORES)]
 
     else:
         st.title(f'Carteira de: {nome_colaborador}')
-        st.info(f'O sistema busca as metas apenas de {nome_colaborador}!')
         df_colaborador = df[df['nome_responsavel'] == nome_colaborador]
-        st.dataframe(df_colaborador)
+
+    # -----------------------------------------------------------------------------
+    # 2.2.1 TRANSFORMAÇÃO E FILTROS (ETL - Transform)
+    # -----------------------------------------------------------------------------
+    
+    # -----------------------------------------------------------------------------
+    # 2.2.2 REGRAS DE NEGÓCIO E KPIs
+    # -----------------------------------------------------------------------------
+    mes_atual = datetime.now().month
+    ano_atual = datetime.now().year
+
+    df_alerta = df_colaborador[
+        (df_colaborador['data_vencimento'].dt.month == mes_atual) &
+        (df_colaborador['data_vencimento'].dt.year == ano_atual) &
+        (df_colaborador['data_dif'] < 180)
+    ].sort_values(by = 'data_dif', ascending = False)
+
+    df_criticos = df_colaborador[
+        df_colaborador['data_dif'] >= 180
+    ].sort_values(by = 'dias_sem_novas_notas', ascending = False)
+
+    clientes_criticos = len(df_criticos)
+    clientes_alerta = len(df_alerta)
+    
+    meta_mensal = df_metas[
+        (df_metas['mes'] == mes_atual) &
+        (df_metas['ano'] == ano_atual)
+    ]
+
+    meta_alvo = None
+
+    if nome_colaborador == 'Pesquisadores':
+        meta_equipe = meta_mensal[meta_mensal['nome_responsavel'].isin(TIME_PESQUISADORES)]
+        if not meta_mensal.empty:
+            meta_alvo = int(meta_equipe['meta_fixa'].sum())
+
+    else:
+        meta_individual = meta_mensal[meta_mensal['nome_responsavel'] == nome_colaborador]
+        if not meta_individual.empty:
+            meta_alvo = int(meta_individual['meta_fixa'].iloc[0])
+
+    distancia_meta = 0
+    cor_delta = 'normal'
+
+    if meta_alvo is not None:
+        clientes_fim_mes = clientes_criticos + clientes_alerta
+        distancia_meta = clientes_fim_mes - meta_alvo
+
+        if distancia_meta > 0:
+            cor_delta = 'inverse'
+        elif distancia_meta == 0:
+            cor_delta = 'normal'
+        else:
+            cor_delta = 'yellow'
+
+    # -----------------------------------------------------------------------------
+    # 2.2.3 RENDERIZAÇÃO DA INTERFACE VISUAL
+    # -----------------------------------------------------------------------------
+    configuracao_padrao = {
+        'nome_cliente': st.column_config.TextColumn('Nome do Cliente'),
+        'dias_sem_novas_notas': st.column_config.NumberColumn('Dias Sem Notas', format = '%d dias', help = 'Quantidade de dias que a nota está atrasada'),
+        'link_do_app': st.column_config.LinkColumn('Link do App', display_text = 'Abrir Link'),
+        'faixa_dias_pesquisa': st.column_config.TextColumn('Status do Cliente'),
+        'data_dif': st.column_config.NumberColumn('Dias de Casa', format = '%d dias'),
+        'data_regressiva': st.column_config.NumberColumn('Dias Restantes', format = '%d dias'),
+        'data_inicio_pesquisas': st.column_config.DateColumn('Início', format = 'DD/MM/YYYY'),
+        'data_vencimento': st.column_config.DateColumn('Vencimento', format = 'DD/MM/YYYY')
+    }
+
+    # Gráfico de Dias na Casa
+    st.markdown('---')
+    st.header(f'Mostrando {len(df_colaborador)} Clientes')
+
+    #Visualização de Gráficos e Tabelas de Meta
+    col_kpi, col_clientes = st.columns(2)
+
+    col_kpi.metric(
+        'Clientes >= 180 Dias',
+        clientes_criticos,
+        delta = distancia_meta,
+        delta_color = cor_delta
+    )
+
+    col_kpi.subheader('Dias na Casa')
+    tabela_clientes = df_colaborador['faixa_dias_pesquisa'].value_counts().reset_index(name = 'quantidade')
+    fig_clientes = px.pie(
+        tabela_clientes,
+        values = 'quantidade',
+        names = 'faixa_dias_pesquisa',
+        hole = 0.4,
+        color = 'faixa_dias_pesquisa',
+        color_discrete_map = st.session_state['paleta_atual'],
+        category_orders = {'faixa_dias_pesquisa': ORDEM_STATUS}
+    )
+    fig_clientes.update_traces(sort = False)
+    col_kpi.plotly_chart(fig_clientes, width = 'stretch', key = f'grafico_exec_{nome_colaborador}', config = {'displayModeBar': False})
+
+    col_clientes.warning('⚠️ Clientes próximos de estourar o prazo')
+    col_clientes.dataframe(
+        df_alerta[['nome_cliente', 'link_do_app', 'data_dif', 'data_regressiva', 'data_vencimento']],
+        column_config = configuracao_padrao,
+        width = 'stretch',
+        height = 475,
+        hide_index = True
+    )
+
+    st.subheader('Clientes >= 180 Dias')
+    st.dataframe(
+        df_criticos[['nome_cliente', 'link_do_app', 'dias_sem_novas_notas', 'data_dif', 'data_inicio_pesquisas', 'data_vencimento']],
+        column_config = configuracao_padrao,
+        width = 'stretch',
+        hide_index = True
+    )
+
+    #Visualização da Carteira
+    colunas_carteira = [
+        'nome_cliente',
+        'dias_sem_novas_notas',
+        'link_do_app',
+        'data_dif',
+        'faixa_dias_pesquisa',
+        'data_inicio_pesquisas',
+        'data_vencimento'
+    ]
+
+    df_carteira = df_colaborador[colunas_carteira].sort_values(
+        by = 'dias_sem_novas_notas',
+        ascending = False
+    )
+
+    with st.expander('Sua Carteira'):
+        st.dataframe(
+            df_carteira,
+            column_config = configuracao_padrao,
+            width = 'stretch',
+            hide_index = True
+        )
 
 # -----------------------------------------------------------------------------
 # 2.3 DASHBOARD DA GENEALOGIA (VISÃO MACRO)
@@ -264,6 +448,10 @@ def dashboard_genealogia(visao_escolhida):
     elif visao_escolhida == 'Executores':
         st.title('Visão Macro: Executores')
         df_visao =df[df['nome_responsavel'].isin(TIME_EXECUTORES)]
+
+    elif visao_escolhida == 'Pesquisadores':
+        st.title('Visão Macro: Pesquisadores')
+        df_visao =df[df['nome_responsavel'].isin(TIME_PESQUISADORES)]
 
     else:
         st.title(f'Visão Macro: {visao_escolhida}')
@@ -300,7 +488,7 @@ def dashboard_genealogia(visao_escolhida):
         category_orders = {'faixa_dias_pesquisa': ORDEM_STATUS}
     )
     fig_clientes.update_traces(sort = False)
-    col_kpi.plotly_chart(fig_clientes, width = 'stretch', key = f'grafico_gen_{visao_escolhida}')
+    col_kpi.plotly_chart(fig_clientes, width = 'stretch', key = f'grafico_gen_{visao_escolhida}', config = {'displayModeBar': False})
 
     col_tabela.info('Mostrando Todos Clientes')
     col_tabela.dataframe(df_visao, width = 'stretch', hide_index = True)
@@ -388,7 +576,7 @@ else:
 
         with aba_genealogia:
             nomes_unicos = df['nome_responsavel'].unique().tolist()
-            lista_geral = ['Genealogia', 'Executores'] + sorted(nomes_unicos, key = lambda x: unicodedata.normalize('NFKD', str(x)).encode('ASCII', 'ignore'))
+            lista_geral = ['Genealogia', 'Executores', 'Pesquisadores'] + sorted(nomes_unicos, key = lambda x: unicodedata.normalize('NFKD', str(x)).encode('ASCII', 'ignore'))
             visao_escolhida = st.selectbox('Selecione a Visão Macro:', lista_geral, key = 'sel_gen')
             dashboard_genealogia(visao_escolhida)
 
@@ -398,7 +586,7 @@ else:
             dashboard_executor(executor_escolhido)
 
         with aba_pesquisadores:
-            lista_pesquisadores = ['Pesquisadores'] + sorted(['Vanessa Rocha', 'Ian Castello'], key = lambda x: unicodedata.normalize('NFKD', str(x)).encode('ASCII', 'ignore'))
+            lista_pesquisadores = ['Pesquisadores'] + sorted(TIME_PESQUISADORES, key = lambda x: unicodedata.normalize('NFKD', str(x)).encode('ASCII', 'ignore'))
             pesquisador_escolhido = st.selectbox('Selecione o Pesquisador:', lista_pesquisadores, key = 'sel_pesq')
             dashboard_pesquisador(pesquisador_escolhido)
 
@@ -421,4 +609,4 @@ else:
 
 # Rodapé do Sistema
 st.sidebar.markdown('---')
-st.sidebar.caption('Build v3.0.0 | Dev: João Pedro')
+st.sidebar.caption('Build v3.1.0 | Dev: João Pedro')
