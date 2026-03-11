@@ -1,6 +1,7 @@
 import time
 import requests
 import unicodedata
+import urllib.parse
 import pandas as pd
 import streamlit as st
 import plotly.express as px
@@ -51,6 +52,14 @@ TEMAS_GRAFICO = {
     'Mr. Robot': {
         '>=180 dias': '#8A0303', '91-179 dias': '#C0392B', 
         '31-90 dias': '#BDC3C7', '<30 dias': '#ECF0F1', 'Sem data': '#2C3E50'
+    },
+    'Cleitin': {
+        '>=180 dias': '#FF007F', '91-179 dias': '#FF7F50', 
+        '31-90 dias': '#00E5FF', '<30 dias': '#39FF14', 'Sem data': '#9D4EDD'
+    },
+    'Gold': {
+        '>=180 dias': '#C69320', '91-179 dias': '#DBA514', 
+        '31-90 dias': '#EEB609', '<30 dias': '#FCC201', 'Sem data': '#B78628'
     }
 }
 
@@ -93,17 +102,166 @@ def carregar_dados():
         res_metas = requests.get(f'{API_URL}/metas')
         df_metas = pd.DataFrame(res_metas.json())
 
-        df['data_inicio_pesquisas'] = pd.to_datetime(df['data_inicio_pesquisas'], dayfirst = True, errors = 'coerce')
-        df['data_vencimento'] = df['data_inicio_pesquisas'] + pd.to_timedelta(180, unit = 'd')
-        df['data_dif'] = (pd.Timestamp.now() - df['data_inicio_pesquisas']).dt.days
-        df['data_regressiva'] = (180 - df['data_dif']).clip(lower = 0)
-        df['nome_responsavel'] = df['nome_responsavel'].fillna('Sem Responsável')
+        res_finalizados = requests.get(f'{API_URL}/finalizados')
+        df_finalizados = pd.DataFrame(res_finalizados.json())
 
-        return df, df_metas
+        if not df.empty:
+            df['data_inicio_pesquisas'] = pd.to_datetime(df['data_inicio_pesquisas'], dayfirst = True, errors = 'coerce')
+            df['data_vencimento'] = df['data_inicio_pesquisas'] + pd.to_timedelta(180, unit = 'D')
+            df['data_dif'] = (pd.Timestamp.now() - df['data_inicio_pesquisas']).dt.days
+            df['data_regressiva'] = (180 - df['data_dif']).clip(lower = 0)
+            df['nome_responsavel'] = df['nome_responsavel'].fillna('Sem Responsável')
+
+        if not df_finalizados.empty:
+            df_finalizados['data_cadastro'] = pd.to_datetime(df_finalizados['data_cadastro'], errors = 'coerce')
+            df_finalizados['data_vencimento'] = df_finalizados['data_cadastro'] + pd.to_timedelta(180, unit = 'D')
+            df_finalizados['data_dif'] = (pd.Timestamp.now() - df_finalizados['data_cadastro']).dt.days
+
+            mes_atual = datetime.now().month
+            ano_atual = datetime.now().year
+
+            df_finalizados['critico_no_mes'] = (
+                (df_finalizados['data_dif'] >= 180) |
+                (
+                    (df_finalizados['data_vencimento'].dt.month == mes_atual) &
+                    (df_finalizados['data_vencimento'].dt.year == ano_atual)
+                )
+            )
+
+        return df, df_metas, df_finalizados
 
     except Exception as e:
         st.error(f'Erro ao conectar com a API: {e}')
-        return pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+@st.cache_data(ttl = 600)
+def buscar_nota(nome_usuario):
+    try:
+        nome_url = urllib.parse.quote(nome_usuario)
+        res = requests.get(f'{API_URL}/notas/{nome_url}', timeout = 5)
+
+        if res.status_code == 200:
+            return res.json().get('texto', '')
+
+    except:
+        pass
+    
+    return ''
+
+def bloco_de_notas(nome_usuario):
+    st.subheader(f'Bloco de Notas de {nome_usuario}')
+
+    texto_atual = buscar_nota(nome_usuario)
+
+    texto_editado = st.text_area(
+        'Seu espaço livre',
+        value = texto_atual,
+        height = 300,
+        placeholder = 'Digite seus rascunhos, pendências e lembretes aqui...',
+        label_visibility = 'collapsed',
+        key = f'nota_{nome_usuario}'
+    )
+
+    if st.button('Salvar Bloco de Notas', key = f'btn_{nome_usuario}', width = 'stretch'):
+        payload = {'dono_nota': nome_usuario, 'texto': texto_editado}
+
+        try:
+            res = requests.post(f'{API_URL}/notas', json = payload)
+
+            if res.status_code == 200:
+                buscar_nota.clear()
+                st.toast('Anotações salvas com sucesso!', icon = '✅')
+                time.sleep(1)
+                st.rerun()
+
+            else:
+                st.error('Erro ao salvar no banco.')
+
+        except Exception as e:
+            st.error(f'Erro de conexão: {e}')
+
+def formulario_finalizados(nome_usuario):
+    st.subheader('Registrar Cliente Finalizado')
+
+    with st.form(key = f'form_finalizados_{nome_usuario}', clear_on_submit = True):
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            cliente_nome = st.text_input('Nome Cliente', value = '')
+            cliente_id = st.number_input('Cliente ID', value = None, step = 1)
+
+        with col2:
+            cidadania = st.selectbox('Cidadania', ['', 'Itália', 'Portugal', 'Alemanha', 'Espanha'])
+            data_cadastro = st.date_input('Data Cadastro do App', value = None)
+
+        with col3:
+            total_macro = st.number_input('Total Macro', value = None, step = 1)
+            status_cliente = st.selectbox('Status do Cliente', ['', 'Conforme', 'Inconforme', 'Pendente', 'Cliente Bronze'])
+
+        st.caption('Todos os campos são obrigatórios')
+        btn_registrar = st.form_submit_button('Salvar Cliente Finalizado', width = 'stretch')
+
+        if btn_registrar:
+            if cliente_nome and cliente_id and cidadania and data_cadastro and total_macro and status_cliente:
+                dados_finalizados = {
+                    'cliente_id': cliente_id,
+                    'cliente': cliente_nome.strip(),
+                    'data_cadastro': data_cadastro.strftime('%Y-%m-%d'),
+                    'total_macro': total_macro,
+                    'responsavel': nome_usuario,
+                    'cidadania': cidadania,
+                    'status_cliente': status_cliente,
+                }
+
+                try:
+                    res = requests.post(f'{API_URL}/finalizados', json = dados_finalizados)
+
+                    if res.status_code == 200 and res.json().get('sucesso'):
+                        st.balloons()
+                        st.success(f'Excelente! {cliente_nome} registrado.')
+                    
+                    else:
+                        st.error(f'Erro na API: {res.json().get('erro')}')
+                
+                except Exception as e:
+                    st.error(f'Erro de conexão com a API: {e}')
+            
+            else:
+                st.warning('Preencha TODOS os Campos Antes de Enviar.')
+
+def metricas_finalizados(nome_usuario, lista_time):
+        st.subheader('Seus Clientes Finalizados')
+
+        if not df_finalizados.empty:
+            if nome_usuario in ['Executores', 'Pesquisadores']:
+                df_fin_colab = df_finalizados[df_finalizados['responsavel'].isin(lista_time)]
+            
+            else:
+                df_fin_colab = df_finalizados[df_finalizados['responsavel'] == nome_usuario]
+
+            mes_atual = datetime.now().month
+            df_fin_mes = df_fin_colab[
+                pd.to_datetime(df_fin_colab['data_atualizacao']).dt.month == mes_atual
+            ]
+
+            total_finalizados = len(df_fin_mes)
+            total_criticos = df_fin_mes['critico_no_mes'].sum()
+
+            total_atencao = ((df_fin_mes['data_dif'] >= 91) &
+                             (df_fin_mes['data_dif'] <= 179) &
+                             (df_fin_mes['critico_no_mes'] == False)).sum()
+            
+            total_saudaveis = ((df_fin_mes['data_dif'] >= 31) &
+                               (df_fin_mes['data_dif'] <= 90)).sum()
+            
+            total_novos = (df_fin_mes['data_dif'] <= 30).sum()
+
+            col_res1, col_res2 = st.columns(2)
+            col_res1.metric('Total Finalizado no Mês', total_finalizados)
+            col_res1.metric('Atenção', total_atencao)
+            col_res1.metric('Novos', total_novos)
+            col_res2.metric('Críticos', total_criticos)
+            col_res2.metric('Saudáveis', total_saudaveis)
 
 def enviar_csv(arquivo, endpoint):
     try:
@@ -128,13 +286,7 @@ def enviar_csv(arquivo, endpoint):
     except Exception as e:
         st.sidebar.error(f'Falha ao enviar: {e}')
 
-def destacar_atraso(linha):
-    if pd.notna(linha['dias_sem_novas_notas']) and linha['dias_sem_novas_notas'] >= 180:
-        return ['background-color: #ff4b4b33'] * len(linha)
-    
-    return [''] * len(linha)
-
-df, df_metas = carregar_dados()
+df, df_metas, df_finalizados = carregar_dados()
 
 # -----------------------------------------------------------------------------
 # 2. DEFININDO OS DASHBOARDS
@@ -278,15 +430,23 @@ def dashboard_executor(nome_colaborador):
         ascending = False
     )
 
-    df_carteira_estilizada = df_carteira.style.apply(destacar_atraso, axis = 1)
-
     with st.expander('Sua Carteira'):
         st.dataframe(
-            df_carteira_estilizada,
+            df_carteira,
             column_config = configuracao_padrao,
             width = 'stretch',
             hide_index = True
         )
+    
+    st.markdown('---')
+    bloco_de_notas(nome_colaborador)
+
+    col_form, col_metrica = st.columns([3, 1])
+    with col_form:
+        formulario_finalizados(nome_colaborador)
+
+    with col_metrica:
+        metricas_finalizados(nome_colaborador, TIME_EXECUTORES)
 
 # -----------------------------------------------------------------------------
 # 2.2 DASHBOARD DOS PESQUISADORES
@@ -368,6 +528,10 @@ def dashboard_pesquisador(nome_colaborador):
         'data_vencimento': st.column_config.DateColumn('Vencimento', format = 'DD/MM/YYYY')
     }
 
+    st.markdown('---')
+    formulario_finalizados(nome_colaborador)
+    metricas_finalizados(nome_colaborador, TIME_PESQUISADORES)
+
     # Gráfico de Dias na Casa
     st.markdown('---')
     st.header(f'Mostrando {len(df_colaborador)} Clientes')
@@ -436,6 +600,9 @@ def dashboard_pesquisador(nome_colaborador):
             width = 'stretch',
             hide_index = True
         )
+
+    st.markdown('---')
+    bloco_de_notas(nome_colaborador)
 
 # -----------------------------------------------------------------------------
 # 2.3 DASHBOARD DA GENEALOGIA (VISÃO MACRO)
