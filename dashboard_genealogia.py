@@ -115,7 +115,7 @@ def carregar_dados():
             limites = [-1, 30, 90, 179, float('inf')]
             rotulos = ['<30 dias', '31-90 dias', '91-179 dias', '>=180 dias']
 
-            df['faixa_dias_pesquisa'] = pd.cut(df['daa_dif'], bins = limites, labels = rotulos)
+            df['faixa_dias_pesquisa'] = pd.cut(df['data_dif'], bins = limites, labels = rotulos)
             df['faixa_dias_pesquisa'] = df['faixa_dias_pesquisa'].astype(str).replace('nan', 'Sem data')
 
         if not df_finalizados.empty:
