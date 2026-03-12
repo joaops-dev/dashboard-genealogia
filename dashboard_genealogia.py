@@ -389,6 +389,17 @@ def dashboard_executor(nome_colaborador):
         delta_color = cor_delta
     )
 
+    if meta_alvo is not None:
+        chave_balao = f'balao_meta_{nome_colaborador}'
+
+        if distancia_meta <= 0:
+            if not st.session_state.get(chave_balao, False):
+                st.balloons()
+                st.session_state[chave_balao] = True
+        
+        else:
+            st.session_state[chave_balao] = False
+
     col_kpi.subheader('Dias na Casa')
     tabela_clientes = df_colaborador['faixa_dias_pesquisa'].value_counts().reset_index(name = 'quantidade')
     fig_clientes = px.pie(
