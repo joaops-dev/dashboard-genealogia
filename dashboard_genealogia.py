@@ -767,9 +767,9 @@ else:
         nome_logado = st.session_state['nome']
         dashboard_pesquisador(nome_logado)
 
-    if st.sidebar.button('Limpar Cache do Banco'):
+    if st.sidebar.button('Limpar Cache do Banco', key = f'cache_clean_{nome_logado}'):
             st.cache_data.clear()
-            st.toast('Cache limpo com sucesso!', key = f'cache_clean_{nome_logado}', icon = '✅')
+            st.toast('Cache limpo com sucesso!', icon = '✅')
             time.sleep(1.5)
             st.rerun()
 
