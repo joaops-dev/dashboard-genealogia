@@ -189,7 +189,11 @@ def bloco_de_notas(nome_usuario):
 def formulario_finalizados(nome_usuario):
     st.subheader('Registrar Cliente Finalizado')
 
-    with st.form(key = f'form_finalizados_{nome_usuario}', clear_on_submit = True):
+    chave_dinamica = f'form_key_{nome_usuario}'
+    if chave_dinamica not in st.session_state:
+        st.session_state[chave_dinamica] = 0
+
+    with st.form(key = f'form_finalizados_{nome_usuario}_{st.session_state[chave_dinamica]}'):
         col1, col2, col3 = st.columns(3)
 
         with col1:
@@ -204,8 +208,18 @@ def formulario_finalizados(nome_usuario):
             total_macro = st.number_input('Total Macro', value = None, step = 1)
             status_cliente = st.selectbox('Status do Cliente', ['', 'Conforme', 'Inconforme', 'Investigação Com Cidadania', 'Investigação Sem Cidadania', 'Cliente Bronze'])
 
-        st.caption('Todos os campos são obrigatórios')
-        btn_registrar = st.form_submit_button('Salvar Cliente Finalizado', width = 'stretch')
+        st.caption('Para SALVAR: Preencha todos os campos.')
+
+        col_btn1, col_btn2 = st.columns(2)
+
+        with col_btn1:
+            btn_registrar = st.form_submit_button('Salvar Cliente Finalizado', width = 'stretch')
+
+        cargo_atual = st.session_state.get('cargo')
+        btn_excluir = False
+        if cargo_atual in ['gestor', 'dev', 'coordenado']:
+            with col_btn2:
+                btn_excluir = st.form_submit_button('Excluir Cliente', width = 'stretch', type = 'primary')
 
         if btn_registrar:
             if cliente_nome and cliente_id and cidadania and data_cadastro and total_macro and status_cliente:
@@ -225,6 +239,11 @@ def formulario_finalizados(nome_usuario):
                     if res.status_code == 200 and res.json().get('sucesso'):
                         st.balloons()
                         st.success(f'Excelente! {cliente_nome} registrado.')
+
+                        st.session_state[chave_dinamica] += 1
+                        st.cache_data.clear()
+                        time.sleep(1.5)
+                        st.rerun()
                     
                     else:
                         st.error(f'Erro na API: {res.json().get('erro')}')
@@ -234,6 +253,30 @@ def formulario_finalizados(nome_usuario):
             
             else:
                 st.warning('Preencha TODOS os Campos Antes de Enviar.')
+
+        if btn_excluir:
+            if not cliente_id:
+                st.warning('Para excluir, você precisa informar o ID do Cliente.')
+
+            elif cliente_nome or cidadania != '' or data_cadastro is not None or total_macro is not None or status_cliente != '':
+                st.error('Exclusão Bloqueada: Parece que foi um clique acidental! Para excluir, preencha SOMENTE o "Cliente ID" e deixe todo o resto em branco.')
+
+            else:
+                try:
+                    res = requests.delete(f'{API_URL}/finalizados/{int(cliente_id)}')
+                    if res.status_code == 200 and res.json().get('sucesso'):
+                        st.success(f'Cliente {cliente_id} vaporizado com sucesso!')
+
+                        st.session_state[chave_dinamica] += 1
+                        st.cache_data.clear()
+                        time.sleep(1.5)
+                        st.rerun()
+
+                    else:
+                        st.error('Ops! Esse ID não foi encontrado no banco de finalizados.')
+
+                except Exception as e:
+                    st.error(f'Erro de conexão: {e}')
 
 def metricas_finalizados(nome_usuario, lista_time):
         st.subheader('Seus Clientes Finalizados')
@@ -464,6 +507,29 @@ def dashboard_executor(nome_colaborador):
 
     with col_metrica:
         metricas_finalizados(nome_colaborador, TIME_EXECUTORES)
+
+    cargo_atual = st.session_state.get('cargo')
+    if cargo_atual in ['gestor', 'dev', 'coordenador']:
+        with st.expander('Histórico Global de Finalizados'):
+
+            if not df_finalizados.empty:
+                
+                st.dataframe(
+                    df_finalizados,
+                    column_config = {
+                        'cliente_id': st.column_config.NumberColumn('ID', format = '%d'),
+                        'cliente': 'Nome do Cliente',
+                        'responsavel': 'Responsável',
+                        'cidadania': 'Cidadania',
+                        'status_cliente': 'Status',
+                        'data_cadastro': st.column_config.DateColumn('Data', format = 'DD/MM/YYYY')
+                    },
+                    width = 'stretch',
+                    hide_index = True
+                )
+
+    else:
+        st.info('Nenhum cliente finalizado registrado na base até o momento.')
 
 # -----------------------------------------------------------------------------
 # 2.2 DASHBOARD DOS PESQUISADORES
