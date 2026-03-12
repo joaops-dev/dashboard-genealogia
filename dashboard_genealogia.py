@@ -112,6 +112,12 @@ def carregar_dados():
             df['data_regressiva'] = (180 - df['data_dif']).clip(lower = 0)
             df['nome_responsavel'] = df['nome_responsavel'].fillna('Sem Responsável')
 
+            limites = [-1, 30, 90, 179, float('inf')]
+            rotulos = ['<30 dias', '31-90 dias', '91-179 dias', '>=180 dias']
+
+            df['faixa_dias_pesquisa'] = pd.cut(df['daa_dif'], bins = limites, labels = rotulos)
+            df['faixa_dias_pesquisa'] = df['faixa_dias_pesquisa'].astype(str).replace('nan', 'Sem data')
+
         if not df_finalizados.empty:
             df_finalizados['data_cadastro'] = pd.to_datetime(df_finalizados['data_cadastro'], errors = 'coerce')
             df_finalizados['data_vencimento'] = df_finalizados['data_cadastro'] + pd.to_timedelta(180, unit = 'D')
@@ -725,19 +731,13 @@ else:
                     enviar_csv(up_metas, 'upload-metas')
 
         if cargo == 'dev' or nome_logado == 'João Pedro Silva Freitas':
-            st.sidebar.header('Ferramentas VIP')
+            with st.sidebar.expander('Ferramentas VIP'):
 
-            if st.sidebar.button('Limpar Cache do Banco'):
-                st.cache_data.clear()
-                st.toast('Cache limpo com sucesso!', icon = '✅')
-                time.sleep(1.5)
-                st.rerun()
+                tema_escolhido = st.selectbox('Paleta de Cores:', list(TEMAS_GRAFICO.keys()))
 
-            tema_escolhido = st.sidebar.selectbox('Paleta de Cores:', list(TEMAS_GRAFICO.keys()))
-
-            if st.session_state.get('paleta_atual') != TEMAS_GRAFICO[tema_escolhido]:
-                st.session_state['paleta_atual'] = TEMAS_GRAFICO[tema_escolhido]
-                st.rerun()
+                if st.session_state.get('paleta_atual') != TEMAS_GRAFICO[tema_escolhido]:
+                    st.session_state['paleta_atual'] = TEMAS_GRAFICO[tema_escolhido]
+                    st.rerun()
 
         aba_genealogia, aba_executores, aba_pesquisadores = st.tabs(['Genealogia', 'Executores', 'Pesquisadores'])
 
@@ -766,6 +766,12 @@ else:
     elif cargo == 'pesquisador':
         nome_logado = st.session_state['nome']
         dashboard_pesquisador(nome_logado)
+
+    if st.sidebar.button('Limpar Cache do Banco'):
+            st.cache_data.clear()
+            st.toast('Cache limpo com sucesso!', key = f'cache_clean_{nome_logado}', icon = '✅')
+            time.sleep(1.5)
+            st.rerun()
 
     if st.sidebar.button('Sair'):
         controller.remove('usuario_logado')
