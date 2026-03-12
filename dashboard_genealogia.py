@@ -106,7 +106,7 @@ def carregar_dados():
         df_finalizados = pd.DataFrame(res_finalizados.json())
 
         if not df.empty:
-            df['data_inicio_pesquisas'] = pd.to_datetime(df['data_inicio_pesquisas'], format = 'mixed', dayfirst = True, errors = 'coerce')
+            df['data_inicio_pesquisas'] = pd.to_datetime(df['data_inicio_pesquisas'], errors = 'coerce')
             df['data_vencimento'] = df['data_inicio_pesquisas'] + pd.to_timedelta(180, unit = 'D')
             df['data_dif'] = (pd.Timestamp.now() - df['data_inicio_pesquisas']).dt.days
             df['data_regressiva'] = (180 - df['data_dif']).clip(lower = 0)
@@ -119,7 +119,7 @@ def carregar_dados():
             df['faixa_dias_pesquisa'] = df['faixa_dias_pesquisa'].astype(str).replace('nan', 'Sem data')
 
         if not df_finalizados.empty:
-            df_finalizados['data_cadastro'] = pd.to_datetime(df_finalizados['data_cadastro'], format = 'ISO8601', errors = 'coerce')
+            df_finalizados['data_cadastro'] = pd.to_datetime(df_finalizados['data_cadastro'], errors = 'coerce')
             df_finalizados['data_vencimento'] = df_finalizados['data_cadastro'] + pd.to_timedelta(180, unit = 'D')
             df_finalizados['data_dif'] = (pd.Timestamp.now() - df_finalizados['data_cadastro']).dt.days
 
@@ -247,7 +247,7 @@ def metricas_finalizados(nome_usuario, lista_time):
 
             mes_atual = datetime.now().month
             df_fin_mes = df_fin_colab[
-                pd.to_datetime(df_fin_colab['data_cadastro'], format = 'ISO8601', errors = 'coerce').dt.month == mes_atual
+                pd.to_datetime(df_fin_colab['data_atualizacao'], errors = 'coerce').dt.month == mes_atual
             ]
 
             total_finalizados = len(df_fin_mes)
@@ -782,4 +782,4 @@ else:
 
 # Rodapé do Sistema
 st.sidebar.markdown('---')
-st.sidebar.caption('Build v3.1.2 | Dev: João Pedro')
+st.sidebar.caption('Build v3.1.3 | Dev: João Pedro')
