@@ -106,15 +106,6 @@ def carregar_dados():
         df_finalizados = pd.DataFrame(res_finalizados.json())
 
         if not df.empty:
-            if 'nome_status_contrato_servico' in df.columns:
-                df = df[df['nome_status_contrato_servico'] == 'Em execução']
-
-            if 'id_cliente' in df.columns:
-                df = df.drop_duplicates(subset = ['id_cliente'], keep = 'first')
-
-            if 'pesquisas_concluidas' in df.columns:
-                df = df[df['pesquisas_concluidas'] == 0]
-
             df['data_inicio_pesquisas'] = pd.to_datetime(df['data_inicio_pesquisas'], format = 'mixed', dayfirst = True, errors = 'coerce')
             df['data_vencimento'] = df['data_inicio_pesquisas'] + pd.to_timedelta(180, unit = 'D')
             df['data_dif'] = (pd.Timestamp.now() - df['data_inicio_pesquisas']).dt.days
@@ -414,7 +405,7 @@ def dashboard_executor(nome_colaborador):
 
     col_clientes.warning('⚠️ Clientes próximos de estourar o prazo')
     col_clientes.dataframe(
-        df_alerta[['nome_cliente', 'link_do_app', 'data_dif', 'data_regressiva', 'data_vencimento', 'nome_status_contrato_servico']],
+        df_alerta[['nome_cliente', 'link_do_app', 'data_dif', 'data_regressiva', 'data_vencimento']],
         column_config = configuracao_padrao,
         width = 'stretch',
         height = 475,
@@ -423,7 +414,7 @@ def dashboard_executor(nome_colaborador):
 
     st.subheader('Clientes >= 180 Dias')
     st.dataframe(
-        df_criticos[['nome_cliente', 'link_do_app', 'dias_sem_novas_notas', 'data_dif', 'data_inicio_pesquisas', 'data_vencimento', 'nome_status_contrato_servico']],
+        df_criticos[['nome_cliente', 'link_do_app', 'dias_sem_novas_notas', 'data_dif', 'data_inicio_pesquisas', 'data_vencimento']],
         column_config = configuracao_padrao,
         width = 'stretch',
         hide_index = True
@@ -437,9 +428,7 @@ def dashboard_executor(nome_colaborador):
         'data_dif',
         'faixa_dias_pesquisa',
         'data_inicio_pesquisas',
-        'data_vencimento',
-        'nome_time',
-        'nome_status_contrato_servico'
+        'data_vencimento'
     ]
 
     df_carteira = df_colaborador[colunas_carteira].sort_values(
