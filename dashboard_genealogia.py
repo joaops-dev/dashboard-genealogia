@@ -692,8 +692,8 @@ if st.session_state['logado'] == False:
             st.session_state['nome'] = login[usuario_digitado]['nome_real']
             st.session_state['cargo'] = login[usuario_digitado]['cargo']
 
-            controller.set('usuario_logado', login[usuario_digitado]['nome_real'], max_age = 86400)
-            controller.set('cargo_logado', login[usuario_digitado]['cargo'], max_age = 86400)
+            controller.set('usuario_logado', login[usuario_digitado]['nome_real'], max_age = 43200)
+            controller.set('cargo_logado', login[usuario_digitado]['cargo'], max_age = 43200)
             
             st.success('Login efetuado! Carregando...')
             time.sleep(1.0)
