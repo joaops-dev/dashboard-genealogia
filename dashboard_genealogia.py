@@ -532,6 +532,9 @@ def dashboard_pesquisador(nome_colaborador):
     formulario_finalizados(nome_colaborador)
     metricas_finalizados(nome_colaborador, TIME_PESQUISADORES)
 
+    st.markdown('---')
+    bloco_de_notas(nome_colaborador)
+
     # Gráfico de Dias na Casa
     st.markdown('---')
     st.header(f'Mostrando {len(df_colaborador)} Clientes')
@@ -600,9 +603,6 @@ def dashboard_pesquisador(nome_colaborador):
             width = 'stretch',
             hide_index = True
         )
-
-    st.markdown('---')
-    bloco_de_notas(nome_colaborador)
 
 # -----------------------------------------------------------------------------
 # 2.3 DASHBOARD DA GENEALOGIA (VISÃO MACRO)
@@ -776,4 +776,4 @@ else:
 
 # Rodapé do Sistema
 st.sidebar.markdown('---')
-st.sidebar.caption('Build v3.1.0 | Dev: João Pedro')
+st.sidebar.caption('Build v3.1.1 | Dev: João Pedro')
