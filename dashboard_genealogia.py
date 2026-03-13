@@ -140,11 +140,10 @@ def carregar_dados():
         st.error(f'Erro ao conectar com a API: {e}')
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-@st.cache_data(ttl = 600)
 def buscar_nota(nome_usuario):
     try:
         nome_url = urllib.parse.quote(nome_usuario)
-        res = requests.get(f'{API_URL}/notas/{nome_url}', timeout = 5)
+        res = requests.get(f'{API_URL}/notas/{nome_url}', timeout = 15)
 
         if res.status_code == 200:
             return res.json().get('texto', '')
@@ -175,7 +174,6 @@ def bloco_de_notas(nome_usuario):
             res = requests.post(f'{API_URL}/notas', json = payload)
 
             if res.status_code == 200:
-                buscar_nota.clear()
                 st.toast('Anotações salvas com sucesso!', icon = '✅')
                 time.sleep(1)
                 st.rerun()
@@ -208,19 +206,28 @@ def formulario_finalizados(nome_usuario):
             total_macro = st.number_input('Total Macro', value = None, step = 1)
             status_cliente = st.selectbox('Status do Cliente', ['', 'Conforme', 'Inconforme', 'Investigação Com Cidadania', 'Investigação Sem Cidadania', 'Cliente Bronze'])
 
-        st.caption('Para SALVAR: Preencha todos os campos.')
+        cargo_atual = st.session_state.get('cargo')
+        st.caption('Para salvar preencha todos os campos.')
 
         col_btn1, col_btn2 = st.columns(2)
 
         with col_btn1:
             btn_registrar = st.form_submit_button('Salvar Cliente Finalizado', width = 'stretch')
 
-        cargo_atual = st.session_state.get('cargo')
         btn_excluir = False
         if cargo_atual in ['gestor', 'dev', 'coordenado']:
             with col_btn2:
                 btn_excluir = st.form_submit_button('Excluir Cliente', width = 'stretch', type = 'primary')
 
+        senha_gestor = ''
+        if cargo_atual in ['gestor', 'coordenador', 'dev']:
+            st.markdown('---')
+            st.caption('**ZONA DE PERIGO (EXCLUSÃO):** Para apagar um cliente, preencha SOMENTE o ID lá em cima e a sua Senha aqui embaixo.')
+            senha_gestor = st.text_input('Senha de Autenticação', type = 'password')
+
+        # -------------------------------------------------------------
+        # LÓGICA DO BOTÃO SALVAR
+        # -------------------------------------------------------------
         if btn_registrar:
             if cliente_nome and cliente_id and cidadania and data_cadastro and total_macro and status_cliente:
                 dados_finalizados = {
@@ -254,6 +261,9 @@ def formulario_finalizados(nome_usuario):
             else:
                 st.warning('Preencha TODOS os Campos Antes de Enviar.')
 
+        # -------------------------------------------------------------
+        # LÓGICA DO BOTÃO EXCLUIR (Com Autenticação de Senha)
+        # -------------------------------------------------------------
         if btn_excluir:
             if not cliente_id:
                 st.warning('Para excluir, você precisa informar o ID do Cliente.')
@@ -261,22 +271,35 @@ def formulario_finalizados(nome_usuario):
             elif cliente_nome or cidadania != '' or data_cadastro is not None or total_macro is not None or status_cliente != '':
                 st.error('Exclusão Bloqueada: Parece que foi um clique acidental! Para excluir, preencha SOMENTE o "Cliente ID" e deixe todo o resto em branco.')
 
+            elif not senha_gestor:
+                st.error('Segurança: Digite a sua senha de login para autorizar a exclusão.')
+
             else:
-                try:
-                    res = requests.delete(f'{API_URL}/finalizados/{int(cliente_id)}')
-                    if res.status_code == 200 and res.json().get('sucesso'):
-                        st.success(f'Cliente {cliente_id} vaporizado com sucesso!')
+                senha_correta = False
+                for user, data in st.secrets['usuarios'].items():
+                    if data['nome_real'] == st.session_state['nome'] and data['senha'] == senha_gestor:
+                        senha_correta = True
+                        break
 
-                        st.session_state[chave_dinamica] += 1
-                        st.cache_data.clear()
-                        time.sleep(1.5)
-                        st.rerun()
+                if not senha_correta:
+                    st.error('Senha incorreta! A exclusão foi abortada.')
 
-                    else:
-                        st.error('Ops! Esse ID não foi encontrado no banco de finalizados.')
+                else:
+                    try:
+                        res = requests.delete(f'{API_URL}/finalizados/{int(cliente_id)}')
+                        if res.status_code == 200 and res.json().get('sucesso'):
+                            st.success(f'Cliente {cliente_id} vaporizado com sucesso!')
 
-                except Exception as e:
-                    st.error(f'Erro de conexão: {e}')
+                            st.session_state[chave_dinamica] += 1
+                            st.cache_data.clear()
+                            time.sleep(1.5)
+                            st.rerun()
+
+                        else:
+                            st.error('Ops! Esse ID não foi encontrado no banco de finalizados.')
+
+                    except Exception as e:
+                        st.error(f'Erro de conexão: {e}')
 
 def metricas_finalizados(nome_usuario, lista_time):
         st.subheader('Seus Clientes Finalizados')
@@ -859,4 +882,4 @@ else:
 
 # Rodapé do Sistema
 st.sidebar.markdown('---')
-st.sidebar.caption('Build v3.1.4 | Dev: João Pedro')
+st.sidebar.caption('Build v3.2.0 | Dev: João Pedro')
