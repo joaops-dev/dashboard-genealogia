@@ -74,7 +74,8 @@ TIME_EXECUTORES = [
     'Leandro Pires Costa',
     'Isabella Fernandes Fukushima',
     'Rayssa Gomes Carvalho',
-    'Emerson de Oliveira Figueredo'
+    'Emerson de Oliveira Figueredo',
+    'João Pedro Silva Freitas'
 ]
 TIME_PESQUISADORES = [
     'Ian Castello',
